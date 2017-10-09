@@ -46,50 +46,70 @@ void buffer_queue_prepend(buffer_queue_t bq, const uv_buf_t data) {
 	}
 	bq->length += n->data.len;
 }
-uv_buf_t buffer_queue_fetch_size(buffer_queue_t bq, size_t size) {
+uv_buf_t buffer_queue_slice_first(buffer_queue_t bq) {
+	return buffer_queue_slice(bq, bq->head->data.len);
+}
+uv_buf_t buffer_queue_slice(buffer_queue_t bq, size_t size) {
 	// 数据不足
 	if(size > bq->length) {
 		return (uv_buf_t) {.base = NULL, .len = 0};
 	}
 	uv_buf_t data;
+	node_t*  node = bq->head;
 	// 首个 buffer 特殊处理
-	if(bq->head->data.len - bq->offset > size) {
-		data.base = bq->head->data.base + bq->offset;
+	if(node->data.len - bq->offset > size) {
+		data.base = node->data.base + bq->offset;
 		data.len    = size;
 		bq->offset += size;
+		bq->length -= size;
 		return data;
-	}else if(bq->head->data.len - bq->offset == size) {
-		data = bq->head->data;
-		bq->head   = bq->head->next;
-		bq->offset = 0;
-		return data;
-	}else{ // bq->head->data.len < size
-		bq->head   = bq->head->next;
-		bq->offset = 0;
-		data.base  = (char*)malloc(size);
+	}else if(node->data.len - bq->offset == size) {
+		data.base = (char*)malloc(size);
+		data.len  = size;
+		memcpy(data.base, node->data.base + bq->offset, size);
 
-		memcpy(data.base, bq->head->data.base, bq->head->data.len);
-		data.len = bq->head->data.len;
-		size    -= data.len;
+		bq->offset = 0;
+		bq->length-= size;
+		bq->head = node->next;
+		free(node);
+		return data;
+	}else{ // node->data.len < size
+		data.base  = (char*)malloc(size);
+		memcpy(data.base, node->data.base, node->data.len);
+		data.len   = node->data.len;
+		size      -= data.len;
+
+		bq->offset = 0;
+		bq->length-= node->data.len;
+		bq->head   = node->next;
+		free(node);
 	}
-	while(size > 0 && bq->head != NULL) {
-		if(bq->head->data.len > size) {
-			memcpy(data.base + data.len, bq->head->data.base, size);
+
+	while(size > 0) {
+		node = bq->head;
+		if(node->data.len > size) {
+			memcpy(data.base + data.len, node->data.base, size);
 			data.len   += size;
 			bq->offset += size;
+			bq->length -= size;
 			return data;
-		}else if(bq->head->data.len == size) {
-			memcpy(data.base + data.len, bq->head->data.base, size);
+		}else if(node->data.len == size) {
+			memcpy(data.base + data.len, node->data.base, size);
 			data.len  += size;
-			bq->head   = bq->head->next;
+
 			bq->offset = 0;
+			bq->offset-= size;
+			bq->head   = node->next;
+			free(node);
 			return data;
-		}else{ // bq->head->data.len < size
-			memcpy(data.base + data.len, bq->head->data.base, bq->head->data.len);
-			size      -= bq->head->data.len;
-			data.len  += bq->head->data.len;
-			bq->head   = bq->head->next;
+		}else{ // node->data.len < size
+			memcpy(data.base + data.len, node->data.base, node->data.len);
+			size      -= node->data.len;
+			data.len  += node->data.len;
 			bq->offset = 0;
+			bq->length-= node->data.len;
+			bq->head   = node->next;
+			free(node);
 		}
 	}
 	return data;

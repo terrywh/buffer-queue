@@ -61,6 +61,8 @@ void buffer_queue_prepend(buffer_queue_t bq, const uv_buf_t data);
 size_t   buffer_queue_length();
 // slice the buffers of size bytes from the beginning of the queue and return the sliced part
 uv_buf_t buffer_queue_slice(buffer_queue_t bq, size_t size);
+// slice the first buffer in the queue and return it
+uv_buf_t buffer_queue_slice_first(buffer_queue_t bq);
 // find the delimiter and return the end position where it was found (including the delimiter)
 ssize_t  buffer_queue_find(buffer_queue_t bq, const uv_buf_t delim);
 void buffer_queue_destroy(buffer_queue_t bq);

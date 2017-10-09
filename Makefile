@@ -1,5 +1,5 @@
-CFLAGS?= -std=c99 -O3
-CFLAGS+=-fPIC
+CFLAGS?= -O3
+CFLAGS+= -std=c99 -fPIC
 CC=gcc
 AR?=ar
 
