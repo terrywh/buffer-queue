@@ -8,6 +8,8 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#ifndef UV_H
 // 以下部分代码摘自 libuv 附相关许可证
 // =============================================================================
 /* Copyright Joyent, Inc. and other Node contributors. All rights reserved.
@@ -51,6 +53,8 @@ typedef struct uv_buf_t {
 	size_t len;
 } uv_buf_t;
 #endif
+
+#endif
 // =============================================================================
 
 typedef struct buffer_queue * buffer_queue_t;
@@ -60,7 +64,7 @@ buffer_queue_t buffer_queue_create();
 uv_buf_t buffer_queue_buffer(size_t size);
 void buffer_queue_append(buffer_queue_t bq, const uv_buf_t data);
 void buffer_queue_prepend(buffer_queue_t bq, const uv_buf_t data);
-size_t   buffer_queue_length();
+size_t   buffer_queue_length(buffer_queue_t bq);
 // slice the buffers of size bytes from the beginning of the queue and return the sliced part
 uv_buf_t buffer_queue_slice(buffer_queue_t bq, size_t size);
 // slice the first buffer in the queue and return it
