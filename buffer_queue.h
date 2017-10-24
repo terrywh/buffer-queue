@@ -8,7 +8,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-// 以下代码摘自 libuv 附相关许可证
+// 以下部分代码摘自 libuv 附相关许可证
 // =============================================================================
 /* Copyright Joyent, Inc. and other Node contributors. All rights reserved.
  *
@@ -54,8 +54,10 @@ typedef struct uv_buf_t {
 // =============================================================================
 
 typedef struct buffer_queue * buffer_queue_t;
-
+uv_buf_t buffer_create(size_t size);
+void buffer_destroy(uv_buf_t buf);
 buffer_queue_t buffer_queue_create();
+uv_buf_t buffer_queue_buffer(size_t size);
 void buffer_queue_append(buffer_queue_t bq, const uv_buf_t data);
 void buffer_queue_prepend(buffer_queue_t bq, const uv_buf_t data);
 size_t   buffer_queue_length();

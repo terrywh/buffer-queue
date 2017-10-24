@@ -14,7 +14,12 @@ typedef struct buffer_queue {
 	size_t          offset; // 用于标识第一个 buffer 的偏移位置
 	size_t          length;
 } * buffer_queue_t;
-
+uv_buf_t buffer_create(size_t size) {
+	return (uv_buf_t) {.base = (char*)malloc(size), .len = size};
+}
+void buffer_destroy(uv_buf_t buf) {
+	free(buf.base);
+}
 buffer_queue_t buffer_queue_create() {
 	return (buffer_queue_t)calloc(1, sizeof(struct buffer_queue));
 }
@@ -147,6 +152,7 @@ void buffer_queue_destroy(buffer_queue_t bq) {
 	while(n != NULL) {
 		o = n;
 		if(n->next != NULL) n = n->next;
+		free(o->data.base);
 		free(o);
 	}
 	free(bq);
