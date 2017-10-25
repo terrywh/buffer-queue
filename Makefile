@@ -1,5 +1,4 @@
 CFLAGS?= -O3
-CFLAGS+= -std=c99 -fPIC
 CC=gcc
 AR?=ar
 
@@ -7,7 +6,7 @@ AR?=ar
 all: buffer_queue.o
 
 %.o: %.c
-	$(CC) ${CFLAGS} -c $^ -o $@
+	$(CC) ${CFLAGS} -std=c99 -fPIC -c $^ -o $@
 libbq.so: buffer_queue.o
 	$(CC) -shared -o $@ $^
 libbq.a: buffer_queue.o

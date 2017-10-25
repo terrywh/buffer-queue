@@ -12,8 +12,13 @@ typedef struct bq_queue {
 bq_buffer_t bq_alloc(size_t size) {
 	// TODO 靠齐内存大小
 	bq_buffer_t data = (bq_buffer_t)malloc(sizeof(bq_buffer_t) + size);
-	data->len = size;
+	data->next = NULL;
+	data->len  = size;
+
 	return data;
+}
+bq_buffer_t bq_from(char* data) {
+	return (bq_buffer_t)(data - offsetof(struct bq_buffer, data));
 }
 void bq_free(void* data) {
 	free(data);
@@ -22,11 +27,11 @@ bq_queue_t bq_create() {
 	bq_queue_t q = (bq_queue_t)bq_alloc(sizeof(bq_buffer_t));
 	q->head = NULL;
 	q->len  = 0;
+	q->tail = NULL;
 	return q;
 }
 void bq_append(bq_queue_t bq, bq_buffer_t data) {
-	data->next = NULL;
-	if(bq->tail != NULL) {
+	if(bq->head != NULL) {
 		bq->tail->next = data;
 		bq->tail = data;
 	}else{
@@ -53,17 +58,22 @@ bq_buffer_t bq_slice(bq_queue_t bq, size_t size) {
 	bq_buffer_t node = bq->head;
 	// 首个 buffer 特殊处理优化效率
 	if(node->len > size) {
-		item = node;
-		node = bq_alloc(node->len - size);
-		memcpy(node->data, item->data + size, node->len);
-		node->next = item->next;
-		item->len  = size;
+		bq->head = bq_alloc(node->len - size);
+		memcpy(bq->head->data, node->data + size, bq->head->len);
+		bq->head->next = node->next;
+
+		if(bq->tail == node) bq->tail = bq->head;
 		bq->len   -= size;
-		bq->head   = node;
-		return item;
+
+		node->next = NULL;
+		node->len  = size;
+		return node;
 	}else if(node->len == size) {
 		bq->head = node->next;
+		if(bq->tail == node) bq->tail = NULL;
 		bq->len -= size;
+
+		node->next = NULL;
 		return node;
 	}else{ // node->len < size
 		item = bq_alloc(size);
@@ -79,19 +89,25 @@ bq_buffer_t bq_slice(bq_queue_t bq, size_t size) {
 	while(size > 0) {
 		node = bq->head;
 		if(node->len > size) {
-			memcpy(item->data + item->len, node->data, size);
-			item->len += size;
-			bq->head   = bq_alloc(node->len - size);
+			bq->head = bq_alloc(node->len - size);
+			bq->len   -= size;
+			if(bq->tail == node) bq->tail = bq->head;
 			memcpy(bq->head->data, node->data + size, bq->head->len);
 			bq->head->next = node->next;
-			bq->len   -= size;
+
+			memcpy(item->data + item->len, node->data, size);
+			item->len += size;
+
 			bq_free(node);
 			return item;
 		}else if(node->len == size) {
 			memcpy(item->data + item->len, node->data, size);
 			item->len += size;
-			bq->len   -= size;
+
 			bq->head   = node->next;
+			bq->len   -= size;
+			if(bq->tail == node) bq->tail = NULL;
+
 			bq_free(node);
 			return item;
 		}else{ // node->len < size

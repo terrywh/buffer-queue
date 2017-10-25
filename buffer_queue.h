@@ -19,6 +19,7 @@ typedef struct bq_buffer {
 
 typedef struct bq_queue* bq_queue_t;
 bq_buffer_t bq_alloc(size_t size);
+bq_buffer_t bq_from(char* data);
 bq_queue_t  bq_create();
 void        bq_destroy(bq_queue_t bq);
 void        bq_append(bq_queue_t bq, bq_buffer_t data);
