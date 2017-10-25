@@ -1,35 +1,37 @@
 #include "buffer_queue.h"
 #include <stdio.h>
+#include <string.h>
 
-buffer_queue_t create() {
-	buffer_queue_t bq = buffer_queue_create();
+bq_queue_t create() {
+	bq_queue_t  bq = bq_create();
+	bq_buffer_t bi;
 
-	buffer_queue_append(bq, (uv_buf_t) {.base = "ab", .len = 2});
-	buffer_queue_append(bq, (uv_buf_t) {.base = "cd", .len = 2});
-	buffer_queue_append(bq, (uv_buf_t) {.base = "ef", .len = 2});
-	buffer_queue_append(bq, (uv_buf_t) {.base = "gh", .len = 2});
+	bi = bq_alloc(2); memcpy(bi->data, "ab", 2); bq_append(bq, bi);
+	bi = bq_alloc(2); memcpy(bi->data, "cd", 2); bq_append(bq, bi);
+	bi = bq_alloc(2); memcpy(bi->data, "ef", 2); bq_append(bq, bi);
+	bi = bq_alloc(2); memcpy(bi->data, "gh", 2); bq_append(bq, bi);
 
 	return bq;
 }
 int main(int argc, char* argv[]) {
-	buffer_queue_t bq = create();
-	printf("length: %d\n", buffer_queue_length(bq));
-	printf("offset of 'ab': %ld\n", buffer_queue_find(bq, (uv_buf_t){.base="ab", .len=2}));
-	printf("offset of 'bc': %ld\n", buffer_queue_find(bq, (uv_buf_t) {.base="bc", .len=2}));
-	printf("offset of 'cde': %ld\n", buffer_queue_find(bq, (uv_buf_t) {.base="cde", .len=3}));
-	printf("offset of 'gh': %ld\n", buffer_queue_find(bq, (uv_buf_t) {.base="gh", .len=2}));
-	printf("offset of 'cdefg': %ld\n", buffer_queue_find(bq, (uv_buf_t) {.base="cdefg", .len=5}));
-	printf("offset of 'h': %ld\n", buffer_queue_find(bq, (uv_buf_t) {.base="h", .len=1}));
+	bq_queue_t bq = create();
+	printf("length: %d\n", bq_length(bq));
+	printf("offset of 'ab': %ld\n", bq_find(bq, "ab", 2));
+	printf("offset of 'bc': %ld\n", bq_find(bq, "bc", 2));
+	printf("offset of 'cde': %ld\n", bq_find(bq, "cde", 3));
+	printf("offset of 'gh': %ld\n", bq_find(bq, "gh", 2));
+	printf("offset of 'cdefg': %ld\n", bq_find(bq, "cdefg", 5));
+	printf("offset of 'h': %ld\n", bq_find(bq, "h", 1));
 
-	uv_buf_t data = buffer_queue_slice_first(bq);
-	printf("data of first:   [%.*s]\n", data.len, data.base);
-	data = buffer_queue_slice(bq, 3);
-	printf("data of slice 3: [%.*s]\n", data.len, data.base);
-	data = buffer_queue_slice(bq, 1);
-	printf("data of slice 1: [%.*s]\n", data.len, data.base);
-	data = buffer_queue_slice(bq, 2);
-	printf("data of slice 2: [%.*s]\n", data.len, data.base);
-	data = buffer_queue_slice(bq, 5);
-	printf("data of slice 5: [%.*s]\n", data.len, data.base);
+	bq_buffer_t item = bq_shift(bq);
+	printf("data of first:   (%d)[%.*s]\n", bq_length(bq), item->len, item->data);
+	item = bq_slice(bq, 3);
+	printf("data of slice 3: (%d)[%.*s]\n", bq_length(bq), item->len, item->data);
+	item = bq_slice(bq, 1);
+	printf("data of slice 1: (%d)[%.*s]\n", bq_length(bq), item->len, item->data);
+	item = bq_slice(bq, 2);
+	printf("data of slice 2: (%d)[%.*s]\n", bq_length(bq), item->len, item->data);
+	item = bq_slice(bq, 5);
+	printf("data of slice 5: (%d){%08x}\n", bq_length(bq), item);
 	return 0;
 }

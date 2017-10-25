@@ -3,144 +3,129 @@
 #include <stdlib.h>
 #include <string.h>
 
-typedef struct node_t {
-	uv_buf_t        data;
-	struct node_t*  next;
-} node_t;
+typedef struct bq_queue {
+	bq_buffer_t     head;
+	size_t          len;
+	bq_buffer_t     tail;
+} * bq_queue_t;
 
-typedef struct buffer_queue {
-	struct node_t*  head;
-	struct node_t*  tail;
-	size_t          offset; // 用于标识第一个 buffer 的偏移位置
-	size_t          length;
-} * buffer_queue_t;
-uv_buf_t buffer_create(size_t size) {
-	return (uv_buf_t) {.base = (char*)malloc(size), .len = size};
+bq_buffer_t bq_alloc(size_t size) {
+	// TODO 靠齐内存大小
+	bq_buffer_t data = (bq_buffer_t)malloc(sizeof(bq_buffer_t) + size);
+	data->len = size;
+	return data;
 }
-void buffer_destroy(uv_buf_t buf) {
-	free(buf.base);
+void bq_free(void* data) {
+	free(data);
 }
-buffer_queue_t buffer_queue_create() {
-	return (buffer_queue_t)calloc(1, sizeof(struct buffer_queue));
+bq_queue_t bq_create() {
+	bq_queue_t q = (bq_queue_t)bq_alloc(sizeof(bq_buffer_t));
+	q->head = NULL;
+	q->len  = 0;
+	return q;
 }
-void buffer_queue_append(buffer_queue_t bq, const uv_buf_t data) {
-	node_t* n = (node_t*)malloc(sizeof(node_t));
-	n->data = data;
-	n->next = NULL;
-	if(bq->head == NULL) {
-		bq->head = n;
-		bq->tail = n;
+void bq_append(bq_queue_t bq, bq_buffer_t data) {
+	data->next = NULL;
+	if(bq->tail != NULL) {
+		bq->tail->next = data;
+		bq->tail = data;
 	}else{
-		bq->tail->next = n;
-		bq->tail = n;
+		bq->head = data;
+		bq->tail = data;
 	}
-	bq->length += n->data.len;
+	bq->len += data->len;
 }
-size_t buffer_queue_length(buffer_queue_t bq) {
-	return bq->length;
+size_t bq_length(bq_queue_t bq) {
+	return bq->len;
 }
-void buffer_queue_prepend(buffer_queue_t bq, const uv_buf_t data) {
-	node_t* n = (node_t*)malloc(sizeof(node_t));
-	n->data = data;
-	n->next = bq->head;
-	if(bq->tail == NULL) {
-		bq->head = n;
-		bq->tail = n;
-	}else{
-		bq->head = n;
-	}
-	bq->length += n->data.len;
+bq_buffer_t bq_shift(bq_queue_t bq) {
+	bq_buffer_t h = bq->head;
+	bq->head = h->next;
+	bq->len -= h->len;
+	return h;
 }
-uv_buf_t buffer_queue_slice_first(buffer_queue_t bq) {
-	return buffer_queue_slice(bq, bq->head->data.len);
-}
-uv_buf_t buffer_queue_slice(buffer_queue_t bq, size_t size) {
+bq_buffer_t bq_slice(bq_queue_t bq, size_t size) {
 	// 数据不足
-	if(size > bq->length) {
-		return (uv_buf_t) {.base = NULL, .len = 0};
+	if(size > bq->len) {
+		return NULL;
 	}
-	uv_buf_t data;
-	node_t*  node = bq->head;
-	// 首个 buffer 特殊处理
-	if(node->data.len - bq->offset > size) {
-		data.base = node->data.base + bq->offset;
-		data.len    = size;
-		bq->offset += size;
-		bq->length -= size;
-		return data;
-	}else if(node->data.len - bq->offset == size) {
-		data.base = (char*)malloc(size);
-		data.len  = size;
-		memcpy(data.base, node->data.base + bq->offset, size);
-
-		bq->offset = 0;
-		bq->length-= size;
+	bq_buffer_t item;
+	bq_buffer_t node = bq->head;
+	// 首个 buffer 特殊处理优化效率
+	if(node->len > size) {
+		item = node;
+		node = bq_alloc(node->len - size);
+		memcpy(node->data, item->data + size, node->len);
+		node->next = item->next;
+		item->len  = size;
+		bq->len   -= size;
+		bq->head   = node;
+		return item;
+	}else if(node->len == size) {
 		bq->head = node->next;
-		free(node);
-		return data;
-	}else{ // node->data.len < size
-		data.base  = (char*)malloc(size);
-		memcpy(data.base, node->data.base, node->data.len);
-		data.len   = node->data.len;
-		size      -= data.len;
+		bq->len -= size;
+		return node;
+	}else{ // node->len < size
+		item = bq_alloc(size);
+		memcpy(item->data, node->data, node->len);
+		item->len = node->len;
 
-		bq->offset = 0;
-		bq->length-= node->data.len;
-		bq->head   = node->next;
-		free(node);
+		size    -= node->len;
+		bq->len -= node->len;
+		bq->head = node->next;
+		bq_free(node);
 	}
 
 	while(size > 0) {
 		node = bq->head;
-		if(node->data.len > size) {
-			memcpy(data.base + data.len, node->data.base, size);
-			data.len   += size;
-			bq->offset += size;
-			bq->length -= size;
-			return data;
-		}else if(node->data.len == size) {
-			memcpy(data.base + data.len, node->data.base, size);
-			data.len  += size;
-
-			bq->offset = 0;
-			bq->offset-= size;
+		if(node->len > size) {
+			memcpy(item->data + item->len, node->data, size);
+			item->len += size;
+			bq->head   = bq_alloc(node->len - size);
+			memcpy(bq->head->data, node->data + size, bq->head->len);
+			bq->head->next = node->next;
+			bq->len   -= size;
+			bq_free(node);
+			return item;
+		}else if(node->len == size) {
+			memcpy(item->data + item->len, node->data, size);
+			item->len += size;
+			bq->len   -= size;
 			bq->head   = node->next;
-			free(node);
-			return data;
-		}else{ // node->data.len < size
-			memcpy(data.base + data.len, node->data.base, node->data.len);
-			size      -= node->data.len;
-			data.len  += node->data.len;
-			bq->offset = 0;
-			bq->length-= node->data.len;
+			bq_free(node);
+			return item;
+		}else{ // node->len < size
+			memcpy(item->data + item->len, node->data, node->len);
+			size      -= node->len;
+			item->len += node->len;
+			bq->len   -= node->len;
 			bq->head   = node->next;
-			free(node);
+			bq_free(node);
 		}
 	}
-	return data;
+	return item;
 }
-ssize_t buffer_queue_find(buffer_queue_t bq, const uv_buf_t delim) {
+ssize_t bq_find(bq_queue_t bq, const char* delim, size_t delen) {
 	if(bq->head == NULL) return -1;
-	
+
 	ssize_t  l = 0;
 	size_t   i = 0;
-	node_t*  n = bq->head;
-	char*    c = n->data.base;
-	uv_buf_t data = {.base = NULL, .len = 0};
+	bq_buffer_t  n = bq->head;
+	char*    c = n->data;
 
-	while(i < delim.len) {
-		if(delim.base[i] == *c) {
+	while(i < delen) {
+		if(delim[i] == *c) {
 			++ i; // 标记查找串位置
 		}else{
 			i=0;
 		}
 		++ l;
-		if(c - n->data.base < n->data.len - 1) { // 本段继续
+		if(c - n->data < n->len - 1) { // 本段继续
 			++ c;
 		}else if(n->next != NULL) { // 下一段
 			n = n->next;
-			c = n->data.base;
-		}else if(i == delim.len) { // 恰好在结尾
+			c = n->data;
+		}else if(i == delen) { // 恰好在结尾
 			break;
 		}else{ // 结尾，未找到
 			return -1;
@@ -148,12 +133,11 @@ ssize_t buffer_queue_find(buffer_queue_t bq, const uv_buf_t delim) {
 	}
 	return l;
 }
-void buffer_queue_destroy(buffer_queue_t bq) {
-	node_t * n = bq->head, * o;
+void bq_destroy(bq_queue_t bq) {
+	bq_buffer_t n = bq->head, o;
 	while(n != NULL) {
 		o = n;
-		if(n->next != NULL) n = n->next;
-		free(o->data.base);
+		n = n->next;
 		free(o);
 	}
 	free(bq);
