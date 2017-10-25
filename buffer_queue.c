@@ -120,12 +120,13 @@ uv_buf_t buffer_queue_slice(buffer_queue_t bq, size_t size) {
 	return data;
 }
 ssize_t buffer_queue_find(buffer_queue_t bq, const uv_buf_t delim) {
+	if(bq->head == NULL) return -1;
+	
 	ssize_t  l = 0;
 	size_t   i = 0;
 	node_t*  n = bq->head;
 	char*    c = n->data.base;
 	uv_buf_t data = {.base = NULL, .len = 0};
-	if(bq->head == NULL) return -1;
 
 	while(i < delim.len) {
 		if(delim.base[i] == *c) {
